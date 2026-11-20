@@ -92,3 +92,13 @@ form > input { margin-bottom: 23px; }
 .account-menu-profile span { color: #71847a; font-size: 12px; }
 .account-menu-panel button { width: 100%; margin-top: 6px; text-align: left; }
 @media (max-width: 400px) { .account-menu-login { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+.dashboard-nav, .account-menu-profile { text-decoration: none; color: inherit; }
+.dashboard-nav { color: #a2efd5; }
+.account-menu-profile:hover { background: #f6f8f7; border-radius: 6px; }
+.profile-form { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.profile-form h2 { margin: 0 0 10px; font-size: 19px; }
+.profile-form label { font-weight: 600; font-size: 14px; }
+.profile-form input { width: min(100%, 400px); padding: 12px; border: 1px solid #d6e2dc; border-radius: 8px; font: inherit; }
+.profile-form p { color: #71847a; margin: 0 0 8px; }
+.profile-form button { border: 0; border-radius: 8px; background: #21483c; color: white; padding: 12px 22px; font: inherit; cursor: pointer; }
+.profile-form button:disabled { opacity: .6; cursor: wait; }

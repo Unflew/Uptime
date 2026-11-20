@@ -58,6 +58,25 @@ func TestValidationAndMiddleware(t *testing.T) {
 			t.Fatalf("body %s: %d", body, w.Code)
 		}
 	}
+	profileToken, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{Subject: "42", ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute))}).SignedString(s.secret)
+	for _, tc := range []struct {
+		token, body string
+		status      int
+	}{
+		{"", `{"display_name":"Alice"}`, 401},
+		{profileToken, `{"display_name":"  "}`, 400},
+		{profileToken, `{"display_name":"Alice","extra":1}`, 400},
+	} {
+		r := httptest.NewRequest(http.MethodPatch, "/auth/me", bytes.NewBufferString(tc.body))
+		if tc.token != "" {
+			r.Header.Set("Authorization", "Bearer "+tc.token)
+		}
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		if w.Code != tc.status {
+			t.Errorf("profile update: got %d, want %d", w.Code, tc.status)
+		}
+	}
 	h := s.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, ok := UserIDFromContext(r.Context())
 		if !ok || id != 42 {
@@ -117,6 +136,22 @@ func TestPostgresAuthFlow(t *testing.T) {
 	}
 	if _, err := s.UserID(tokens.AccessToken); err != nil {
 		t.Fatal(err)
+	}
+	profileRequest := func(method, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "/auth/me", bytes.NewBufferString(body))
+		r.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w = profileRequest("PATCH", `{"display_name":"Новое имя"}`); w.Code != 200 {
+		t.Fatalf("update profile: %d %s", w.Code, w.Body.String())
+	}
+	if w = profileRequest("GET", ""); w.Code != 200 || !bytes.Contains(w.Body.Bytes(), []byte("Новое имя")) {
+		t.Fatalf("read profile: %d %s", w.Code, w.Body.String())
+	}
+	if w = profileRequest("PATCH", `{"display_name":"  "}`); w.Code != 400 {
+		t.Fatalf("invalid profile name: %d", w.Code)
 	}
 	if w = call("/auth/register", credentials); w.Code != 409 {
 		t.Fatalf("duplicate: %d", w.Code)

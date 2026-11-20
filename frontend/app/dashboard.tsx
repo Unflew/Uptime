@@ -1,13 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-type Profile = { login: string; created_at: string };
+type Profile = { login: string; display_name: string; created_at: string };
 
 export default function Dashboard({ onLogout, loading, error }: { onLogout: () => Promise<void>; loading: boolean; error: string }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileError, setProfileError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const pathname = usePathname();
+  const isProfile = pathname === "/profile";
+  const displayName = profile?.display_name || profile?.login;
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed || Array.from(trimmed).length > 100) { setSaveMessage("Имя должно содержать от 1 до 100 символов."); return; }
+    setSaving(true);
+    setSaveMessage("");
+    try {
+      let response = await fetch("/api/auth/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ display_name: trimmed }) });
+      if (response.status === 401) {
+        const refresh = await fetch("/api/auth/refresh", { method: "POST" });
+        if (refresh.ok) response = await fetch("/api/auth/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ display_name: trimmed }) });
+        else if (refresh.status === 401) { await onLogout(); return; }
+      }
+      if (!response.ok) throw new Error();
+      const data = await response.json();
+      setProfile(data);
+      setName(data.display_name);
+      setSaveMessage("Имя сохранено.");
+    } catch { setSaveMessage("Не удалось сохранить имя. Попробуйте ещё раз."); }
+    finally { setSaving(false); }
+  }
 
   useEffect(() => {
     let active = true;
@@ -24,7 +54,7 @@ export default function Dashboard({ onLogout, loading, error }: { onLogout: () =
         }
         if (!response.ok) throw new Error();
         const data = await response.json();
-        if (active) { setProfile(data); setProfileError(""); }
+        if (active) { setProfile(data); setName(data.display_name || data.login); setProfileError(""); }
       } catch {
         if (active) setProfileError("Не удалось загрузить профиль. Попробуйте ещё раз.");
       }
@@ -40,28 +70,35 @@ export default function Dashboard({ onLogout, loading, error }: { onLogout: () =
       <aside className="dashboard-sidebar">
         <div className="dashboard-brand">⌁ <span>uptime<span>up</span>.</span></div>
         <div className="dashboard-nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
-        <div className="dashboard-nav" aria-current="page">◫ <span>Профиль</span></div>
+        <Link className="dashboard-nav" href="/">◫ <span>Дашборд</span></Link>
         <div className="dashboard-sidebar-bottom">UPTIME UP © {new Date().getFullYear()}</div>
       </aside>
       <section className="dashboard-main">
         <header className="dashboard-header">
-          <span>Профиль</span>
+          <span>{isProfile ? "Профиль" : "Дашборд"}</span>
           <details className="account-menu">
-            <summary aria-label="Меню профиля"><span className="account-menu-avatar" aria-hidden="true">{profile?.login.slice(0, 1).toUpperCase() ?? "•"}</span><span className="account-menu-login">{profile?.login ?? "Аккаунт"}</span><span aria-hidden="true">⌄</span></summary>
+            <summary aria-label="Меню профиля"><span className="account-menu-avatar" aria-hidden="true">{displayName?.slice(0, 1).toUpperCase() ?? "•"}</span><span className="account-menu-login">{displayName ?? "Аккаунт"}</span><span aria-hidden="true">⌄</span></summary>
             <div className="account-menu-panel">
-              <div className="account-menu-profile"><span>Профиль</span><strong>{profile?.login ?? "Загрузка…"}</strong></div>
+              <Link href="/profile" className="account-menu-profile"><span>Профиль</span><strong>{displayName ?? "Загрузка…"}</strong></Link>
               <button type="button" onClick={onLogout} disabled={loading}>{loading ? "Выходим…" : "Выйти"}</button>
             </div>
           </details>
         </header>
         <div className="dashboard-content">
-          <div className="dashboard-eyebrow">ВАШ АККАУНТ</div>
-          <h1>Профиль<span>.</span></h1>
-          <p className="dashboard-intro">Информация о вашем аккаунте.</p>
-          <div className="profile-card">
-            <div className="profile-card-heading"><div><h2>Данные профиля</h2><p>Ваши данные для входа в Uptime Up</p></div><div className="profile-avatar" aria-hidden="true">{profile?.login.slice(0, 1).toUpperCase() ?? "•"}</div></div>
-            {profile ? <div className="profile-detail"><span>Логин</span><strong>{profile.login}</strong></div> : profileError ? <div role="alert" className="profile-error">{profileError} <button type="button" onClick={() => { setProfileError(""); setAttempt((n) => n + 1); }}>Повторить</button></div> : <p role="status">Загружаем профиль…</p>}
-          </div>
+          {isProfile && <>
+            <div className="dashboard-eyebrow">ВАШ АККАУНТ</div>
+            <h1>Профиль<span>.</span></h1>
+            <p className="dashboard-intro">Управляйте данными своего профиля.</p>
+            {profile && <form className="profile-card profile-form" onSubmit={saveProfile}>
+              <h2>Данные профиля</h2>
+              <label htmlFor="profile-name">Имя профиля</label>
+              <input id="profile-name" value={name} onChange={(event) => { setName(event.target.value); setSaveMessage(""); }} maxLength={200} required />
+              <p>Логин для входа: <strong>{profile.login}</strong></p>
+              <button type="submit" disabled={saving}>{saving ? "Сохраняем…" : "Сохранить"}</button>
+              {saveMessage && <p role="status">{saveMessage}</p>}
+            </form>}
+          </>}
+          {profileError && <div role="alert" className="profile-error">{profileError} <button type="button" onClick={() => { setProfileError(""); setAttempt((n) => n + 1); }}>Повторить</button></div>}
           {error && <p className="profile-error" role="alert">{error}</p>}
         </div>
       </section>

@@ -22,6 +22,7 @@ import (
 type User struct {
 	ID           int64 `gorm:"primaryKey"`
 	Login        string
+	DisplayName  string
 	PasswordHash string
 	CreatedAt    time.Time
 }
@@ -250,14 +251,31 @@ func (s *Service) Handler() http.Handler {
 		respond(w, http.StatusOK, tokens)
 	})
 	mux.Handle("/auth/me", s.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", http.MethodGet)
+		id, _ := UserIDFromContext(r.Context())
+		if r.Method == http.MethodPatch {
+			var req struct {
+				DisplayName string `json:"display_name"`
+			}
+			if !decode(w, r, &req) || !utf8.ValidString(req.DisplayName) || strings.TrimSpace(req.DisplayName) != req.DisplayName || len([]rune(req.DisplayName)) < 1 || len([]rune(req.DisplayName)) > 100 {
+				respondError(w, http.StatusBadRequest, "invalid display name")
+				return
+			}
+			result := s.db.WithContext(r.Context()).Model(&User{}).Where("id = ?", id).Update("display_name", req.DisplayName)
+			if result.Error != nil {
+				respondError(w, http.StatusInternalServerError, "internal server error")
+				return
+			}
+			if result.RowsAffected == 0 {
+				respondError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+		} else if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET, PATCH")
 			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		id, _ := UserIDFromContext(r.Context())
 		var user User
-		err := s.db.WithContext(r.Context()).Select("id", "login", "created_at").First(&user, id).Error
+		err := s.db.WithContext(r.Context()).Select("id", "login", "display_name", "created_at").First(&user, id).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			respondError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -266,7 +284,7 @@ func (s *Service) Handler() http.Handler {
 			respondError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
-		respond(w, http.StatusOK, map[string]interface{}{"login": user.Login, "created_at": user.CreatedAt})
+		respond(w, http.StatusOK, map[string]interface{}{"login": user.Login, "display_name": user.DisplayName, "created_at": user.CreatedAt})
 	})))
 	return mux
 }
