@@ -249,5 +249,24 @@ func (s *Service) Handler() http.Handler {
 		}
 		respond(w, http.StatusOK, tokens)
 	})
+	mux.Handle("/auth/me", s.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		id, _ := UserIDFromContext(r.Context())
+		var user User
+		err := s.db.WithContext(r.Context()).Select("id", "login", "created_at").First(&user, id).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			respondError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+		respond(w, http.StatusOK, map[string]interface{}{"login": user.Login, "created_at": user.CreatedAt})
+	})))
 	return mux
 }

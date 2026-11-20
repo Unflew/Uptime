@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Dashboard from "./dashboard";
 
 type Mode = "login" | "register";
 
@@ -100,6 +101,10 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!checkingSession && authenticated) {
+    return <Dashboard onLogout={logout} loading={loading} error={error} />;
   }
 
   return (
