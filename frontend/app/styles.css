@@ -82,3 +82,13 @@ form > input { margin-bottom: 23px; }
 .profile-detail span { font-size: 13px; color: #71847a; }
 .profile-error { color: #a43d3d; margin-top: 24px; }
 @media (max-width: 650px) { .dashboard { display: block; } .dashboard-sidebar { width: auto; min-height: 0; padding: 20px; } .dashboard-nav-label, .dashboard-nav, .dashboard-sidebar-bottom { display: none; } .dashboard-header { height: 64px; } .dashboard-content { padding-top: 45px; } .dashboard-content h1 { font-size: 34px; } }
+
+.account-menu { position: relative; }
+.account-menu summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.account-menu summary::-webkit-details-marker { display: none; }
+.account-menu-avatar { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #e1f5ec; color: #287a59; font-weight: 700; }
+.account-menu-panel { position: absolute; z-index: 2; top: calc(100% + 12px); right: 0; width: 220px; padding: 8px; background: #fff; border: 1px solid #e3ebe6; border-radius: 10px; box-shadow: 0 12px 30px rgba(23, 59, 43, .12); }
+.account-menu-profile { display: flex; flex-direction: column; gap: 5px; padding: 10px; overflow-wrap: anywhere; }
+.account-menu-profile span { color: #71847a; font-size: 12px; }
+.account-menu-panel button { width: 100%; margin-top: 6px; text-align: left; }
+@media (max-width: 400px) { .account-menu-login { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }

@@ -44,7 +44,16 @@ export default function Dashboard({ onLogout, loading, error }: { onLogout: () =
         <div className="dashboard-sidebar-bottom">UPTIME UP © {new Date().getFullYear()}</div>
       </aside>
       <section className="dashboard-main">
-        <header className="dashboard-header"><span>Профиль</span><button type="button" onClick={onLogout} disabled={loading}>{loading ? "Выходим…" : "Выйти"}</button></header>
+        <header className="dashboard-header">
+          <span>Профиль</span>
+          <details className="account-menu">
+            <summary aria-label="Меню профиля"><span className="account-menu-avatar" aria-hidden="true">{profile?.login.slice(0, 1).toUpperCase() ?? "•"}</span><span className="account-menu-login">{profile?.login ?? "Аккаунт"}</span><span aria-hidden="true">⌄</span></summary>
+            <div className="account-menu-panel">
+              <div className="account-menu-profile"><span>Профиль</span><strong>{profile?.login ?? "Загрузка…"}</strong></div>
+              <button type="button" onClick={onLogout} disabled={loading}>{loading ? "Выходим…" : "Выйти"}</button>
+            </div>
+          </details>
+        </header>
         <div className="dashboard-content">
           <div className="dashboard-eyebrow">ВАШ АККАУНТ</div>
           <h1>Профиль<span>.</span></h1>

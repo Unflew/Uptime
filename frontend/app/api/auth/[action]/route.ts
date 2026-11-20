@@ -9,8 +9,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   const origin = request.headers.get("origin");
-  if (origin && origin !== request.nextUrl.origin) {
-    return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+  if (origin) {
+    try {
+      const originUrl = new URL(origin);
+      if (originUrl.host !== request.headers.get("host") || originUrl.protocol !== request.nextUrl.protocol) {
+        return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+    }
   }
   if (action === "logout") {
     const response = NextResponse.json({ ok: true });
