@@ -23,6 +23,7 @@ type User struct {
 	ID           int64 `gorm:"primaryKey"`
 	Login        string
 	DisplayName  string
+	Avatar       string
 	PasswordHash string
 	CreatedAt    time.Time
 }
@@ -275,7 +276,7 @@ func (s *Service) Handler() http.Handler {
 			return
 		}
 		var user User
-		err := s.db.WithContext(r.Context()).Select("id", "login", "display_name", "created_at").First(&user, id).Error
+		err := s.db.WithContext(r.Context()).Select("id", "login", "display_name", "avatar", "created_at").First(&user, id).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			respondError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -284,7 +285,11 @@ func (s *Service) Handler() http.Handler {
 			respondError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
-		respond(w, http.StatusOK, map[string]interface{}{"login": user.Login, "display_name": user.DisplayName, "created_at": user.CreatedAt})
+		respond(w, http.StatusOK, map[string]interface{}{"login": user.Login, "display_name": user.DisplayName, "avatar_url": avatarURL(user.Avatar), "created_at": user.CreatedAt})
 	})))
+	mux.Handle("/files", s.RequireAuth(http.HandlerFunc(s.files)))
+	mux.Handle("/files/", s.RequireAuth(http.HandlerFunc(s.serveFile)))
+	mux.Handle("/auth/avatar", s.RequireAuth(http.HandlerFunc(s.uploadAvatar)))
+	mux.HandleFunc("/avatars/", s.serveAvatar)
 	return mux
 }

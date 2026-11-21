@@ -6,9 +6,15 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -98,6 +104,94 @@ func TestValidationAndMiddleware(t *testing.T) {
 		}
 	}
 }
+func avatarRequest(t *testing.T, token string, data []byte) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("avatar", "avatar.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/auth/avatar", &body)
+	r.Header.Set("Content-Type", writer.FormDataContentType())
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	return r
+}
+
+func TestAvatarValidation(t *testing.T) {
+	s := New(nil, "12345678901234567890123456789012", time.Minute, time.Hour)
+	token, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{Subject: "42", ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute))}).SignedString(s.secret)
+	for _, tc := range []struct {
+		token  string
+		data   []byte
+		status int
+	}{
+		{"", []byte("invalid"), 401},
+		{token, []byte("invalid"), 400},
+		{token, bytes.Repeat([]byte("x"), maxAvatarSize+1), 400},
+	} {
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, avatarRequest(t, tc.token, tc.data))
+		if w.Code != tc.status {
+			t.Errorf("got %d, want %d", w.Code, tc.status)
+		}
+	}
+}
+
+func TestGenericFileUpload(t *testing.T) {
+	s := New(nil, "12345678901234567890123456789012", time.Minute, time.Hour)
+	token, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{Subject: "42", ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute))}).SignedString(s.secret)
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "document.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := []byte("a generic file")
+	if _, err := part.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("POST", "/files", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, request)
+	if w.Code != 201 {
+		t.Fatalf("upload: %d %s", w.Code, w.Body.String())
+	}
+	var result struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || !strings.HasPrefix(result.URL, "/api/files/") {
+		t.Fatalf("response: %s", w.Body.String())
+	}
+	name := strings.TrimPrefix(result.URL, "/api/files/")
+	t.Cleanup(func() { os.Remove(filepath.Join("uploads/files", name)) })
+	request = httptest.NewRequest("GET", "/files/"+name, nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	w = httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, request)
+	if w.Code != 200 || !bytes.Equal(w.Body.Bytes(), content) || w.Header().Get("Content-Disposition") != "attachment" {
+		t.Fatalf("download: %d %q", w.Code, w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/files/"+name, nil))
+	if w.Code != 401 {
+		t.Fatalf("anonymous download: %d", w.Code)
+	}
+}
+
 func TestPostgresAuthFlow(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
@@ -149,6 +243,33 @@ func TestPostgresAuthFlow(t *testing.T) {
 	}
 	if w = profileRequest("GET", ""); w.Code != 200 || !bytes.Contains(w.Body.Bytes(), []byte("Новое имя")) {
 		t.Fatalf("read profile: %d %s", w.Code, w.Body.String())
+	}
+	var imageData bytes.Buffer
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	if err := png.Encode(&imageData, img); err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, avatarRequest(t, tokens.AccessToken, imageData.Bytes()))
+	if w.Code != 200 {
+		t.Fatalf("upload avatar: %d %s", w.Code, w.Body.String())
+	}
+	var uploaded struct {
+		AvatarURL string `json:"avatar_url"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &uploaded); err != nil || uploaded.AvatarURL == "" {
+		t.Fatalf("avatar response: %s", w.Body.String())
+	}
+	name := strings.TrimPrefix(uploaded.AvatarURL, "/api/avatars/")
+	t.Cleanup(func() { os.Remove(filepath.Join("uploads/avatars", name)) })
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/avatars/"+name, nil))
+	if w.Code != 200 || !bytes.Equal(w.Body.Bytes(), imageData.Bytes()) {
+		t.Fatalf("serve avatar: %d", w.Code)
+	}
+	if w = profileRequest("GET", ""); w.Code != 200 || !bytes.Contains(w.Body.Bytes(), []byte(uploaded.AvatarURL)) {
+		t.Fatalf("profile avatar: %d %s", w.Code, w.Body.String())
 	}
 	if w = profileRequest("PATCH", `{"display_name":"  "}`); w.Code != 400 {
 		t.Fatalf("invalid profile name: %d", w.Code)

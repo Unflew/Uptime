@@ -102,3 +102,19 @@ form > input { margin-bottom: 23px; }
 .profile-form p { color: #71847a; margin: 0 0 8px; }
 .profile-form button { border: 0; border-radius: 8px; background: #21483c; color: white; padding: 12px 22px; font: inherit; cursor: pointer; }
 .profile-form button:disabled { opacity: .6; cursor: wait; }
+.profile-avatar img, .account-menu-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.profile-card > h2 { margin: 0 0 24px; font-size: 19px; }
+.profile-name-form { margin-top: 28px; padding-top: 28px; border-top: 1px solid #edf1ee; }
+.profile-form { align-items: stretch; gap: 10px; }
+.profile-form h2 { margin-bottom: 14px; }
+.profile-field-label { font-size: 14px; font-weight: 600; }
+.profile-avatar-row { display: flex; align-items: center; gap: 16px; }
+.profile-avatar-row .profile-avatar { width: 68px; height: 68px; flex: 0 0 68px; font-size: 26px; }
+.profile-form .profile-upload-button { padding: 10px 16px; border: 1px solid #d6e2dc; border-radius: 8px; cursor: pointer; }
+.profile-upload-button:hover { background: #f6f8f7; }
+.profile-file-input { position: absolute; width: 1px !important; height: 1px; padding: 0 !important; overflow: hidden; clip-path: inset(50%); }
+.profile-avatar-row:focus-within .profile-upload-button { outline: 2px solid #287a59; outline-offset: 2px; }
+.profile-form .profile-hint { font-size: 13px; margin-bottom: 8px; }
+.profile-form input:not([type="file"]) { width: 100%; box-sizing: border-box; margin-bottom: 10px; }
+.profile-form input[readonly] { background: #f4f6f5; color: #71847a; }
+.profile-form .profile-save { align-self: flex-end; margin-top: 6px; }
